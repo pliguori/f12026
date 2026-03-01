@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fantasy F1 2026</title>
+
+  <!-- Supabase SDK v2 (CDN, no build tool needed) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <style>
+    :root {
+      --red:#e10600; --dark:#15151e; --card:#1e1e2e; --border:#2e2e4e;
+      --gold:#f5c518; --green:#00d2be; --text:#e0e0f0; --muted:#888;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--dark);color:var(--text);font-family:"Segoe UI",sans-serif;min-height:100vh;}
+
+    /* ---- MODAL LOGIN ---- */
+    #login-overlay{
+      position:fixed;inset:0;background:rgba(0,0,0,0.85);
+      display:flex;align-items:center;justify-content:center;z-index:999;
+      backdrop-filter:blur(6px);
+    }
+    .login-box{
+      background:var(--card);border:1px solid var(--border);border-radius:16px;
+      padding:36px 40px;width:100%;max-width:400px;text-align:center;
+    }
+    .login-box h2{font-size:1.4rem;font-weight:900;margin-bottom:6px;}
+    .login-box h2 span{color:var(--red);}
+    .login-box p{color:var(--muted);font-size:0.85rem;margin-bottom:24px;}
+    .login-box input{
+      width:100%;background:var(--dark);border:1px solid var(--border);
+      color:var(--text);padding:12px 16px;border-radius:8px;font-size:1rem;
+      margin-bottom:12px;
+    }
+    .login-box input:focus{outline:none;border-color:var(--red);}
+    .login-btn{
+      width:100%;background:var(--red);color:#fff;border:none;
+      padding:13px;border-radius:8px;font-weight:700;font-size:1rem;cursor:pointer;
+      transition:opacity 0.2s;
+    }
+    .login-btn:hover{opacity:0.85;}
+    .login-btn:disabled{opacity:0.4;cursor:not-allowed;}
+    .login-error{color:#ff6666;font-size:0.82rem;margin-top:8px;min-height:18px;}
+
+    /* ---- HEADER ---- */
+    header{
+      background:linear-gradient(135deg,var(--red) 0%,#8b0000 100%);
+      padding:14px 24px;display:flex;align-items:center;justify-content:space-between;
+      box-shadow:0 4px 20px rgba(225,6,0,0.4);gap:12px;flex-wrap:wrap;
+    }
+    header h1{font-size:1.5rem;font-weight:900;letter-spacing:2px;}
+    header h1 span{color:var(--gold);}
+    .header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    #user-badge{background:rgba(0,0,0,0.3);border-radius:8px;padding:6px 14px;font-size:0.85rem;}
+    #user-badge span{color:var(--gold);font-weight:700;}
+    #budget-display{background:rgba(0,0,0,0.3);border-radius:8px;padding:6px 14px;font-size:1rem;font-weight:700;}
+    #budget-display span{color:var(--gold);}
+    #logout-btn{background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;transition:all 0.2s;}
+    #logout-btn:hover{border-color:#fff;color:#fff;}
+
+    /* ---- TABS ---- */
+    .tabs{display:flex;gap:4px;padding:16px 24px 0;border-bottom:2px solid var(--border);overflow-x:auto;}
+    .tab-btn{background:none;border:none;color:var(--muted);padding:10px 18px;cursor:pointer;font-size:0.9rem;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.2s;font-weight:600;white-space:nowrap;}
+    .tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
+    .tab-btn:hover{color:var(--text);}
+
+    /* ---- PANELS ---- */
+    .panel{display:none;padding:24px;}
+    .panel.active{display:block;}
+
+    /* ---- TEAM ---- */
+    .team-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+    @media(max-width:700px){.team-grid{grid-template-columns:1fr;}}
+    .team-section h3{font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:12px;}
+    .slot{background:var(--card);border:1px dashed var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;min-height:62px;transition:border-color 0.2s;}
+    .slot.filled{border-style:solid;border-color:var(--green);}
+    .slot.captain-slot.filled{border-color:var(--gold);}
+    .slot-info{display:flex;flex-direction:column;}
+    .slot-name{font-weight:700;font-size:1rem;}
+    .slot-sub{font-size:0.75rem;color:var(--muted);margin-top:2px;}
+    .slot-price{font-weight:700;color:var(--green);font-size:0.9rem;}
+    .captain-badge{background:var(--gold);color:#000;font-size:0.65rem;font-weight:900;padding:2px 7px;border-radius:4px;margin-left:8px;}
+    .remove-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:4px 8px;border-radius:6px;transition:color 0.2s;}
+    .remove-btn:hover{color:var(--red);}
+    .empty-label{color:var(--muted);font-size:0.85rem;font-style:italic;}
+    .team-summary{background:var(--card);border-radius:12px;padding:18px 20px;margin-top:24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;}
+    .summary-stat{display:flex;flex-direction:column;align-items:center;}
+    .summary-stat .val{font-size:1.4rem;font-weight:900;color:var(--gold);}
+    .summary-stat .lbl{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+    .team-actions{margin-left:auto;display:flex;gap:10px;}
+    #reset-btn{background:transparent;color:var(--muted);border:1px solid var(--border);padding:12px 16px;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;}
+    #reset-btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+    #validate-btn{background:var(--red);color:#fff;border:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:1rem;cursor:pointer;transition:opacity 0.2s;}
+    #validate-btn:hover{opacity:0.85;}
+    #validate-btn:disabled{opacity:0.4;cursor:not-allowed;}
+    .saving-indicator{font-size:0.8rem;color:var(--muted);margin-top:8px;display:none;}
+    .saving-indicator.active{display:block;color:var(--green);}
+
+    /* ---- MARKET ---- */
+    .market-controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+    .market-controls input,.market-controls select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:8px;font-size:0.9rem;}
+    .market-controls input{flex:1;min-width:160px;}
+    .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+    .driver-card,.team-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;transition:transform 0.15s,border-color 0.2s;}
+    .driver-card:hover,.team-card:hover{transform:translateY(-3px);border-color:var(--green);}
+    .driver-card.selected,.team-card.selected{border-color:var(--green);background:#1e2e2e;}
+    .driver-card.captain-selected{border-color:var(--gold);background:#2e2e1e;}
+    .card-team-badge{font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;}
+    .card-name{font-size:1rem;font-weight:800;margin-bottom:2px;}
+    .card-price{color:var(--green);font-weight:700;font-size:0.95rem;margin-top:4px;}
+    .card-actions{display:flex;gap:6px;margin-top:12px;}
+    .add-btn{flex:1;background:var(--red);color:#fff;border:none;padding:8px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.82rem;transition:opacity 0.2s;}
+    .add-btn:hover{opacity:0.85;}
+    .add-btn:disabled{opacity:0.35;cursor:not-allowed;}
+    .captain-btn{background:#2a2a1a;color:var(--gold);border:1px solid var(--gold);padding:8px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:700;transition:background 0.2s;}
+    .captain-btn:hover{background:#3a3a1a;}
+    .captain-btn:disabled{opacity:0.35;cursor:not-allowed;}
+
+    /* ---- SIMULATION ---- */
+    .sim-header{background:var(--card);border-radius:14px;padding:20px 24px;margin-bottom:24px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+    .sim-header h2{font-size:1.2rem;font-weight:900;}
+    .sim-header h2 span{color:var(--red);}
+    .gp-selector{display:flex;gap:10px;align-items:center;}
+    .gp-selector select{background:var(--dark);border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:8px;font-size:0.9rem;cursor:pointer;}
+    .run-sim-btn{background:linear-gradient(135deg,var(--red),#8b0000);color:#fff;border:none;padding:11px 26px;border-radius:8px;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 14px rgba(225,6,0,0.35);transition:opacity 0.2s;}
+    .run-sim-btn:hover{opacity:0.85;}
+    .sim-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+    @media(max-width:750px){.sim-layout{grid-template-columns:1fr;}}
+    .sim-col-title{font-size:0.78rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:12px;}
+    .race-order-list{list-style:none;}
+    .race-order-list li{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:7px;display:flex;align-items:center;gap:10px;transition:border-color 0.15s;}
+    .race-order-list li:hover{border-color:var(--green);}
+    .race-order-list li.dnf-row{opacity:0.5;border-color:#ff4444;}
+    .pos-num{min-width:26px;height:26px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:0.8rem;}
+    .pos-1{background:var(--gold);color:#000;}.pos-2{background:#aaa;color:#000;}.pos-3{background:#cd7f32;color:#000;}
+    .driver-row-name{flex:1;font-weight:600;font-size:0.9rem;}.driver-row-team{font-size:0.72rem;color:var(--muted);}
+    .row-controls{display:flex;gap:5px;}
+    .row-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:3px 7px;border-radius:5px;cursor:pointer;font-size:0.75rem;transition:all 0.15s;}
+    .row-btn:hover{border-color:var(--text);color:var(--text);}
+    .row-btn.active-red{border-color:var(--red);color:var(--red);background:rgba(225,6,0,0.1);}
+    .row-btn.active-gold{border-color:var(--gold);color:var(--gold);background:rgba(245,197,24,0.1);}
+    .quali-grid{display:flex;flex-direction:column;gap:6px;}
+    .quali-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 14px;display:flex;align-items:center;gap:10px;}
+    .q-pos{min-width:28px;font-weight:900;color:var(--gold);font-size:0.88rem;}.q-name{flex:1;font-weight:600;font-size:0.88rem;}
+    .q-phase{font-size:0.72rem;font-weight:700;padding:2px 7px;border-radius:4px;}
+    .q3{background:rgba(0,210,190,0.2);color:var(--green);}
+    .q2{background:rgba(245,197,24,0.15);color:var(--gold);}
+    .q1{background:rgba(225,6,0,0.15);color:#ff6666;}
+    #sim-results{margin-top:24px;display:none;}
+    .results-banner{background:linear-gradient(135deg,#1a2a1a,var(--card));border:1px solid var(--green);border-radius:14px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .big-score{font-size:3.5rem;font-weight:900;color:var(--green);line-height:1;text-shadow:0 0 30px rgba(0,210,190,0.4);}
+    .big-score-label{font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+    .score-breakdown-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+    .score-breakdown-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;}
+    .score-breakdown-card.captain-card{border-color:var(--gold);}
+    .score-breakdown-card .sbc-name{font-weight:700;font-size:0.95rem;margin-bottom:2px;}
+    .score-breakdown-card .sbc-team{font-size:0.72rem;color:var(--muted);margin-bottom:10px;}
+    .score-item{display:flex;justify-content:space-between;font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border);}
+    .score-item:last-child{border:none;}
+    .score-item .s-label{color:var(--muted);}.score-item .s-val{font-weight:700;}
+    .s-val.pos{color:var(--green);}.s-val.neg{color:#ff6666;}
+    .score-total-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:2px solid var(--border);}
+    .score-total-row .st-label{font-size:0.78rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
+    .score-total-row .st-val{font-size:1.3rem;font-weight:900;color:var(--gold);}
+    .cap-multiplier-note{position:absolute;top:10px;right:12px;background:var(--gold);color:#000;font-size:0.65rem;font-weight:900;padding:2px 7px;border-radius:4px;}
+    .save-score-btn{background:var(--green);color:#000;border:none;padding:12px 24px;border-radius:8px;font-weight:700;font-size:0.95rem;cursor:pointer;margin-top:16px;display:block;width:100%;transition:opacity 0.2s;}
+    .save-score-btn:hover{opacity:0.85;}
+
+    /* ---- LEADERBOARD ---- */
+    .lb-controls{display:flex;justify-content:flex-end;margin-bottom:16px;}
+    .refresh-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;transition:border-color 0.2s;}
+    .refresh-btn:hover{border-color:var(--green);color:var(--green);}
+    .leaderboard-table{width:100%;border-collapse:collapse;}
+    .leaderboard-table th{background:var(--card);color:var(--muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;padding:10px 14px;text-align:left;}
+    .leaderboard-table td{padding:12px 14px;border-bottom:1px solid var(--border);}
+    .leaderboard-table tr:hover td{background:var(--card);}
+    .rank-badge{display:inline-block;width:26px;height:26px;border-radius:50%;text-align:center;line-height:26px;font-weight:900;font-size:0.8rem;}
+    .rank-1{background:var(--gold);color:#000;}.rank-2{background:#aaa;color:#000;}.rank-3{background:#cd7f32;color:#000;}.rank-other{background:var(--border);color:var(--text);}
+    .me-row td{background:rgba(0,210,190,0.05) !important;}
+
+    /* ---- TOAST ---- */
+    #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:12px 24px;border-radius:8px;font-weight:700;font-size:0.9rem;display:none;z-index:9999;box-shadow:0 4px 20px rgba(0,210,190,0.4);}
+    #toast.error{background:var(--red);color:#fff;}
+    #toast.warning{background:var(--gold);color:#000;}
+
+    .loading-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+  </style>
+</head>
+<body>
+
+<!-- =========================================================
+     LOGIN MODAL
+     ========================================================= -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>🏎 FANTASY F1 <span>2026</span></h2>
+    <p>Inserisci un nome utente e il nome del tuo team per iniziare.<br>Se hai già un account, usa lo stesso nome utente per ritrovare la tua squadra.</p>
+    <input type="text" id="input-username" placeholder="Nome utente (es. PietroLiguori)" maxlength="30"/>
+    <input type="text" id="input-teamname" placeholder="Nome del team (es. Trieste Racing)" maxlength="40"/>
+    <div class="login-error" id="login-error"></div>
+    <button class="login-btn" id="login-submit-btn" onclick="doLogin()">Entra nel Gioco 🚀</button>
+  </div>
+</div>
+
+<!-- =========================================================
+     HEADER
+     ========================================================= -->
+<header>
+  <h1>🏎 FANTASY F1 <span>2026</span></h1>
+  <div class="header-right">
+    <div id="user-badge">👤 <span id="user-display">—</span></div>
+    <div id="budget-display">Budget: <span id="budget-left">$100.0M</span></div>
+    <button id="logout-btn" onclick="doLogout()">Esci</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('myteam',this)">🏁 Il Mio Team</button>
+  <button class="tab-btn" onclick="switchTab('market',this)">🛒 Mercato Piloti</button>
+  <button class="tab-btn" onclick="switchTab('constructors',this)">🔧 Costruttori</button>
+  <button class="tab-btn" onclick="switchTab('simulation',this)">🎮 Simula GP</button>
+  <button class="tab-btn" onclick="switchTab('leaderboard',this)">🏆 Classifica</button>
+</div>
+
+<!-- MY TEAM -->
+<div id="panel-myteam" class="panel active">
+  <div class="team-grid">
+    <div class="team-section"><h3>Piloti (scegli 5)</h3><div id="driver-slots"></div></div>
+    <div class="team-section"><h3>Costruttori (scegli 2)</h3><div id="constructor-slots"></div></div>
+  </div>
+  <div class="team-summary">
+    <div class="summary-stat"><span class="val" id="stat-drivers">0/5</span><span class="lbl">Piloti</span></div>
+    <div class="summary-stat"><span class="val" id="stat-constructors">0/2</span><span class="lbl">Costruttori</span></div>
+    <div class="summary-stat"><span class="val" id="stat-spent">$0M</span><span class="lbl">Spesi</span></div>
+    <div class="summary-stat"><span class="val" id="stat-captain">—</span><span class="lbl">Capitano</span></div>
+    <div class="team-actions">
+      <button id="reset-btn" onclick="resetTeam()">🗑️ Azzera</button>
+      <button id="validate-btn" onclick="saveTeamToServer()" disabled>💾 Salva sul Server</button>
+    </div>
+  </div>
+  <p class="saving-indicator" id="saving-indicator">💾 Salvataggio in corso...</p>
+</div>
+
+<!-- MARKET -->
+<div id="panel-market" class="panel">
+  <div class="market-controls">
+    <input type="text" id="search-driver" placeholder="🔍 Cerca pilota..." oninput="renderMarket()"/>
+    <select id="filter-team" onchange="renderMarket()"><option value="">Tutti i Team</option></select>
+    <select id="sort-drivers" onchange="renderMarket()">
+      <option value="price-desc">Prezzo ↓</option>
+      <option value="price-asc">Prezzo ↑</option>
+      <option value="name">Nome A-Z</option>
+    </select>
+  </div>
+  <div class="cards-grid" id="drivers-grid"></div>
+</div>
+
+<!-- CONSTRUCTORS -->
+<div id="panel-constructors" class="panel">
+  <div class="cards-grid" id="constructors-grid"></div>
+</div>
+
+<!-- SIMULATION -->
+<div id="panel-simulation" class="panel">
+  <div class="sim-header">
+    <div>
+      <h2>🎮 Simula <span>Gran Premio</span></h2>
+      <p style="color:var(--muted);font-size:0.82rem;margin-top:4px">Calcola i punti e salvali nella classifica ufficiale</p>
+    </div>
+    <div class="gp-selector">
+      <select id="gp-select" onchange="loadGP()">
+        <option value="bahrain">🇧🇭 GP Bahrain</option>
+        <option value="saudi">🇸🇦 GP Arabia Saudita</option>
+        <option value="australia">🇦🇺 GP Australia</option>
+        <option value="japan">🇯🇵 GP Giappone</option>
+        <option value="custom">✏️ Personalizzato</option>
+      </select>
+      <button class="run-sim-btn" onclick="runSimulation()">▶ Calcola Punti</button>
+    </div>
+  </div>
+  <div class="sim-layout">
+    <div>
+      <div class="sim-col-title">Ordine Arrivo Gara</div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:10px"><b>DNF</b> = ritiro &nbsp;|&nbsp; <b>FL</b> = giro veloce &nbsp;|&nbsp; <b>DD</b> = Driver of the Day</div>
+      <ul class="race-order-list" id="race-order-list"></ul>
+    </div>
+    <div>
+      <div class="sim-col-title">Risultati Qualifiche</div>
+      <div class="quali-grid" id="quali-grid"></div>
+    </div>
+  </div>
+  <div id="sim-results">
+    <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:14px">📊 Risultati Simulazione</div>
+    <div class="results-banner">
+      <div><div class="big-score" id="total-score">0</div><div class="big-score-label">Punti Totali del Tuo Team</div></div>
+      <div id="results-meta" style="font-size:0.85rem;color:var(--muted);line-height:1.8"></div>
+    </div>
+    <div class="score-breakdown-grid" id="score-breakdown-grid"></div>
+    <button class="save-score-btn" onclick="saveScoreToServer()" id="save-score-btn">📤 Salva Punteggio nella Classifica Ufficiale</button>
+  </div>
+</div>
+
+<!-- LEADERBOARD -->
+<div id="panel-leaderboard" class="panel">
+  <div class="lb-controls">
+    <button class="refresh-btn" onclick="loadLeaderboard()">🔄 Aggiorna Classifica</button>
+  </div>
+  <table class="leaderboard-table">
+    <thead><tr><th>#</th><th>Manager</th><th>Team Name</th><th>Punti Totali</th><th>Ultimo GP</th></tr></thead>
+    <tbody id="leaderboard-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Caricamento classifica...</td></tr></tbody>
+  </table>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================================
+// ⚠️  CONFIGURAZIONE SUPABASE  ⚠️
+//    Sostituisci i valori qui sotto con quelli del tuo progetto.
+//    Trovi URL e ANON KEY su:
+//    Supabase Dashboard → Project Settings → API
+// ================================================================
+const SUPABASE_URL = "https://IL-TUO-PROGETTO.supabase.co";
+const SUPABASE_KEY = "LA-TUA-ANON-KEY";
+// ================================================================
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ---- DATI F1 ----
+const BUDGET = 100;
+const DRIVERS = [
+  {id:1,name:"Lando Norris",team:"McLaren",price:27.2,number:4},
+  {id:2,name:"Oscar Piastri",team:"McLaren",price:24.8,number:81},
+  {id:3,name:"Charles Leclerc",team:"Ferrari",price:22.8,number:16},
+  {id:4,name:"Lewis Hamilton",team:"Ferrari",price:22.5,number:44},
+  {id:5,name:"Max Verstappen",team:"Red Bull",price:27.7,number:1},
+  {id:6,name:"Isack Hadjar",team:"Red Bull",price:8.5,number:6},
+  {id:7,name:"George Russell",team:"Mercedes",price:27.4,number:63},
+  {id:8,name:"Kimi Antonelli",team:"Mercedes",price:23.2,number:12},
+  {id:9,name:"Fernando Alonso",team:"Aston Martin",price:14.5,number:14},
+  {id:10,name:"Lance Stroll",team:"Aston Martin",price:9.0,number:18},
+  {id:11,name:"Pierre Gasly",team:"Alpine",price:11.5,number:10},
+  {id:12,name:"Franco Colapinto",team:"Alpine",price:7.5,number:43},
+  {id:13,name:"Esteban Ocon",team:"Haas",price:9.5,number:31},
+  {id:14,name:"Oliver Bearman",team:"Haas",price:7.0,number:87},
+  {id:15,name:"Liam Lawson",team:"Racing Bulls",price:9.0,number:30},
+  {id:16,name:"Arvid Lindblad",team:"Racing Bulls",price:5.5,number:7},
+  {id:17,name:"Carlos Sainz",team:"Williams",price:13.0,number:55},
+  {id:18,name:"Alex Albon",team:"Williams",price:10.5,number:23},
+  {id:19,name:"Nico Hülkenberg",team:"Audi",price:9.5,number:27},
+  {id:20,name:"Gabriel Bortoleto",team:"Audi",price:6.5,number:5},
+  {id:21,name:"Sergio Pérez",team:"Cadillac",price:8.0,number:11},
+  {id:22,name:"Valtteri Bottas",team:"Cadillac",price:6.0,number:77},
+];
+const CONSTRUCTORS = [
+  {id:101,name:"McLaren",price:30.5},{id:102,name:"Ferrari",price:27.0},
+  {id:103,name:"Red Bull",price:25.5},{id:104,name:"Mercedes",price:26.5},
+  {id:105,name:"Aston Martin",price:13.0},{id:106,name:"Alpine",price:10.5},
+  {id:107,name:"Haas",price:9.5},{id:108,name:"Racing Bulls",price:11.0},
+  {id:109,name:"Williams",price:12.5},{id:110,name:"Audi",price:8.5},
+  {id:111,name:"Cadillac",price:7.0},
+];
+const TEAM_COLORS = {
+  "McLaren":"#FF8000","Ferrari":"#E8002D","Red Bull":"#3671C6",
+  "Mercedes":"#27F4D2","Aston Martin":"#358C75","Alpine":"#0093CC",
+  "Haas":"#B6BABD","Racing Bulls":"#6692FF","Williams":"#64C4FF",
+  "Audi":"#C0C0C0","Cadillac":"#B41C2C"
+};
+const RACE_PTS=[25,18,15,12,10,8,6,4,2,1];
+const QUALI_PTS=[10,9,8,7,6,5,4,3,2,1];
+const GP_PRESETS={
+  bahrain:{label:"GP Bahrain — Round 1",raceOrder:[7,1,3,2,5,4,8,17,11,9,18,15,13,19,10,6,12,20,14,21,22,16],dnf:[],fastestLap:7,dotd:3,qualiOrder:[5,7,1,3,8,2,4,17,9,11,18,15,10,13,19,6,12,20,14,21,16,22]},
+  saudi:{label:"GP Arabia Saudita — Round 2",raceOrder:[5,1,7,3,8,2,4,17,9,11,18,15,13,19,10,6,12,20,14,21,22,16],dnf:[4],fastestLap:5,dotd:7,qualiOrder:[5,7,1,3,8,2,4,17,9,11,18,15,10,13,19,6,12,20,14,21,16,22]},
+  australia:{label:"GP Australia — Round 3",raceOrder:[1,7,5,2,3,8,4,17,11,9,18,15,13,19,10,6,12,20,14,21,22,16],dnf:[3],fastestLap:1,dotd:2,qualiOrder:[1,7,5,2,3,8,4,17,9,11,18,15,10,13,19,6,12,20,14,21,16,22]},
+  japan:{label:"GP Giappone — Round 4",raceOrder:[5,7,1,3,2,8,4,17,9,11,18,15,13,19,10,6,12,20,14,21,22,16],dnf:[],fastestLap:8,dotd:5,qualiOrder:[5,7,1,2,3,8,4,17,9,11,18,15,10,13,19,6,12,20,14,21,16,22]},
+  custom:null
+};
+
+// ---- STATE ----
+let currentManagerId = null;
+let currentUsername = "";
+let currentTeamName = "";
+let myDrivers = [];
+let myConstructors = [];
+let captain = null;
+let lastSimScore = 0;
+let lastSimGP = "";
+let simRaceOrder = [];
+let simDNF = new Set();
+let simFastestLap = null;
+let simDotD = null;
+let simQualiOrder = [];
+
+// ================================================================
+//  AUTH / LOGIN
+// ================================================================
+async function doLogin() {
+  const username = document.getElementById("input-username").value.trim();
+  const teamname = document.getElementById("input-teamname").value.trim();
+  const errEl = document.getElementById("login-error");
+  const btn = document.getElementById("login-submit-btn");
+
+  errEl.textContent = "";
+  if (!username || username.length < 2) { errEl.textContent = "⚠️ Inserisci un nome utente di almeno 2 caratteri."; return; }
+  if (!teamname || teamname.length < 2) { errEl.textContent = "⚠️ Inserisci il nome del tuo team."; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Accesso in corso...';
+
+  // Cerca manager esistente
+  let { data: existing } = await db.from("managers").select("id,username,team_name").eq("username", username).maybeSingle();
+
+  if (!existing) {
+    // Nuovo utente: crea manager
+    const { data: created, error } = await db.from("managers").insert({ username, team_name: teamname }).select().single();
+    if (error) { errEl.textContent = "Errore durante la registrazione: " + error.message; btn.disabled=false; btn.textContent="Entra nel Gioco 🚀"; return; }
+    existing = created;
+  }
+
+  currentManagerId = existing.id;
+  currentUsername = existing.username;
+  currentTeamName = existing.team_name;
+  document.getElementById("user-display").textContent = currentUsername + " — " + currentTeamName;
+  document.getElementById("login-overlay").style.display = "none";
+
+  // Carica squadra dal server
+  await loadTeamFromServer();
+  updateUI();
+  showToast("👋 Bentornato, " + currentUsername + "!");
+}
+
+function doLogout() {
+  if (!confirm("Sicuro di voler uscire? La tua squadra è salvata sul server.")) return;
+  currentManagerId = null; currentUsername = ""; currentTeamName = "";
+  myDrivers = []; myConstructors = []; captain = null;
+  document.getElementById("login-overlay").style.display = "flex";
+  document.getElementById("input-username").value = "";
+  document.getElementById("input-teamname").value = "";
+}
+
+// ================================================================
+//  TEAM — SERVER (Supabase)
+// ================================================================
+async function loadTeamFromServer() {
+  if (!currentManagerId) return;
+  const { data } = await db.from("teams").select("*").eq("manager_id", currentManagerId).maybeSingle();
+  if (data) {
+    myDrivers = data.driver_ids || [];
+    myConstructors = data.constructor_ids || [];
+    captain = data.captain_id || null;
+  }
+}
+
+async function saveTeamToServer() {
+  if (!currentManagerId) return;
+  if (myDrivers.length < 5 || myConstructors.length < 2 || !captain) { showToast("Team incompleto!", "error"); return; }
+
+  const indicator = document.getElementById("saving-indicator");
+  indicator.textContent = "💾 Salvataggio in corso...";
+  indicator.className = "saving-indicator active";
+
+  const payload = { manager_id: currentManagerId, driver_ids: myDrivers, constructor_ids: myConstructors, captain_id: captain, updated_at: new Date().toISOString() };
+
+  // upsert: inserisce o aggiorna se esiste già
+  const { error } = await db.from("teams").upsert(payload, { onConflict: "manager_id" });
+
+  if (error) {
+    indicator.textContent = "❌ Errore nel salvataggio.";
+    showToast("Errore: " + error.message, "error");
+  } else {
+    indicator.textContent = "✅ Squadra salvata con successo!";
+    showToast("🏁 Squadra salvata sul server!");
+  }
+  setTimeout(() => { indicator.className = "saving-indicator"; }, 4000);
+}
+
+async function resetTeam() {
+  if (!confirm("Vuoi azzerare la tua squadra? L'operazione non è reversibile.")) return;
+  myDrivers = []; myConstructors = []; captain = null;
+  await saveTeamToServer();
+  updateUI();
+  showToast("🗑️ Squadra azzerata", "error");
+}
+
+// ================================================================
+//  SCORES — SERVER
+// ================================================================
+async function saveScoreToServer() {
+  if (!currentManagerId) return;
+  const btn = document.getElementById("save-score-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Salvataggio...';
+
+  const { error } = await db.from("gp_scores").insert({
+    manager_id: currentManagerId,
+    gp_name: lastSimGP,
+    points: lastSimScore
+  });
+
+  if (error) {
+    showToast("Errore: " + error.message, "error");
+    btn.disabled = false; btn.textContent = "📤 Salva Punteggio nella Classifica Ufficiale";
+  } else {
+    showToast("🏆 Punteggio salvato nella classifica!");
+    btn.textContent = "✅ Punteggio Salvato!";
+    setTimeout(() => { btn.disabled=false; btn.textContent="📤 Salva Punteggio nella Classifica Ufficiale"; }, 5000);
+  }
+}
+
+// ================================================================
+//  LEADERBOARD — SERVER
+// ================================================================
+async function loadLeaderboard() {
+  const tbody = document.getElementById("leaderboard-body");
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px"><span class="loading-spinner" style="border-top-color:var(--muted)"></span> Caricamento...</td></tr>`;
+
+  const { data, error } = await db.from("leaderboard").select("*").order("total_points", { ascending: false }).limit(50);
+
+  if (error) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ff6666;padding:20px">Errore nel caricamento classifica</td></tr>`; return; }
+  if (!data || data.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Nessun punteggio registrato ancora.<br>Sii il primo a salvarne uno dalla sezione "Simula GP"!</td></tr>`; return; }
+
+  tbody.innerHTML = "";
+  data.forEach((row, i) => {
+    const rank = i + 1;
+    const rc = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "rank-other";
+    const isMe = row.username === currentUsername;
+    const tr = document.createElement("tr");
+    if (isMe) tr.className = "me-row";
+    tr.innerHTML = `<td><span class="rank-badge ${rc}">${rank}</span></td><td>${row.username}${isMe?' <span style="color:var(--green);font-size:0.75rem">(tu)</span>':""}</td><td style="color:var(--gold)">${row.team_name}</td><td style="font-weight:900;font-size:1.05rem">${row.total_points}</td><td style="color:var(--green)">+${row.last_gp_points}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ================================================================
+//  HELPERS / UI
+// ================================================================
+function getTotalSpent(){return myDrivers.reduce((s,id)=>s+DRIVERS.find(d=>d.id===id).price,0)+myConstructors.reduce((s,id)=>s+CONSTRUCTORS.find(c=>c.id===id).price,0);}
+function getBudgetLeft(){return BUDGET-getTotalSpent();}
+function showToast(msg,type="success"){const t=document.getElementById("toast");t.textContent=msg;t.className=type==="error"?"error":type==="warning"?"warning":"";t.style.display="block";setTimeout(()=>{t.style.display="none";},3000);}
+function updateUI(){
+  const left=getBudgetLeft();
+  document.getElementById("budget-left").textContent="$"+left.toFixed(1)+"M";
+  document.getElementById("budget-left").style.color=left<5?"#ff6666":"var(--gold)";
+  document.getElementById("stat-drivers").textContent=myDrivers.length+"/5";
+  document.getElementById("stat-constructors").textContent=myConstructors.length+"/2";
+  document.getElementById("stat-spent").textContent="$"+getTotalSpent().toFixed(1)+"M";
+  const capD=captain?DRIVERS.find(d=>d.id===captain):null;
+  document.getElementById("stat-captain").textContent=capD?capD.name.split(" ")[1]:"—";
+  document.getElementById("validate-btn").disabled=!(myDrivers.length===5&&myConstructors.length===2&&captain!==null);
+  renderSlots(); renderMarket(); renderConstructors();
+}
+function renderSlots(){
+  const dSlots=document.getElementById("driver-slots"),cSlots=document.getElementById("constructor-slots");
+  dSlots.innerHTML=""; cSlots.innerHTML="";
+  for(let i=0;i<5;i++){const dId=myDrivers[i],d=dId?DRIVERS.find(x=>x.id===dId):null,isCap=dId&&captain===dId;const div=document.createElement("div");div.className="slot"+(d?" filled":"")+(isCap?" captain-slot":"");if(d){div.innerHTML=`<div class="slot-info"><div class="slot-name" style="color:${TEAM_COLORS[d.team]}">#${d.number} ${d.name}${isCap?'<span class="captain-badge">CAP ×2</span>':''}</div><div class="slot-sub">${d.team}</div></div><div style="display:flex;align-items:center;gap:8px"><span class="slot-price">$${d.price}M</span><button class="remove-btn" onclick="removeDriver(${d.id})">✕</button></div>`;}else{div.innerHTML=`<span class="empty-label">Slot pilota ${i+1} vuoto</span>`;}dSlots.appendChild(div);}
+  for(let i=0;i<2;i++){const cId=myConstructors[i],c=cId?CONSTRUCTORS.find(x=>x.id===cId):null;const div=document.createElement("div");div.className="slot"+(c?" filled":"");if(c){div.innerHTML=`<div class="slot-info"><div class="slot-name" style="color:${TEAM_COLORS[c.name]}">${c.name}</div><div class="slot-sub">Costruttore</div></div><div style="display:flex;align-items:center;gap:8px"><span class="slot-price">$${c.price}M</span><button class="remove-btn" onclick="removeConstructor(${c.id})">✕</button></div>`;}else{div.innerHTML=`<span class="empty-label">Slot costruttore ${i+1} vuoto</span>`;}cSlots.appendChild(div);}
+}
+function renderMarket(){
+  const search=document.getElementById("search-driver").value.toLowerCase(),filterTeam=document.getElementById("filter-team").value,sort=document.getElementById("sort-drivers").value;
+  const sel=document.getElementById("filter-team");if(sel.children.length<=1){[...new Set(DRIVERS.map(d=>d.team))].sort().forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;sel.appendChild(o);});}
+  let list=DRIVERS.filter(d=>d.name.toLowerCase().includes(search)&&(!filterTeam||d.team===filterTeam));
+  if(sort==="price-desc")list.sort((a,b)=>b.price-a.price);else if(sort==="price-asc")list.sort((a,b)=>a.price-b.price);else list.sort((a,b)=>a.name.localeCompare(b.name));
+  const grid=document.getElementById("drivers-grid");grid.innerHTML="";
+  list.forEach(d=>{const isSelected=myDrivers.includes(d.id),isCap=captain===d.id,canAdd=!isSelected&&myDrivers.length<5&&getBudgetLeft()>=d.price;const div=document.createElement("div");div.className="driver-card"+(isSelected?(isCap?" captain-selected":" selected"):"");div.innerHTML=`<div class="card-team-badge" style="color:${TEAM_COLORS[d.team]}">⬤ ${d.team}</div><div class="card-name">#${d.number} ${d.name}</div><div class="card-price">$${d.price}M</div><div class="card-actions"><button class="add-btn" ${isSelected||!canAdd?"disabled":""} onclick="addDriver(${d.id})">${isSelected?"✓ In squadra":"+ Aggiungi"}</button><button class="captain-btn" ${!isSelected?"disabled":""} onclick="setCaptain(${d.id})">${isCap?"★ CAP":"☆ CAP"}</button></div>`;grid.appendChild(div);});
+}
+function renderConstructors(){
+  const grid=document.getElementById("constructors-grid");grid.innerHTML="";
+  CONSTRUCTORS.forEach(c=>{const isSelected=myConstructors.includes(c.id),canAdd=!isSelected&&myConstructors.length<2&&getBudgetLeft()>=c.price;const div=document.createElement("div");div.className="team-card"+(isSelected?" selected":"");div.innerHTML=`<div class="card-team-badge" style="color:${TEAM_COLORS[c.name]}">⬤ Costruttore</div><div class="card-name">${c.name}</div><div class="card-price">$${c.price}M</div><div class="card-actions"><button class="add-btn" ${isSelected||!canAdd?"disabled":""} onclick="addConstructor(${c.id})">${isSelected?"✓ Selezionato":"+ Aggiungi"}</button></div>`;grid.appendChild(div);});
+}
+function addDriver(id){const d=DRIVERS.find(x=>x.id===id);if(myDrivers.length>=5){showToast("Hai già 5 piloti!","error");return;}if(getBudgetLeft()<d.price){showToast("Budget insufficiente!","error");return;}myDrivers.push(id);updateUI();showToast("✅ "+d.name+" aggiunto!");}
+function removeDriver(id){myDrivers=myDrivers.filter(x=>x!==id);if(captain===id)captain=null;updateUI();}
+function setCaptain(id){if(!myDrivers.includes(id))return;captain=id;updateUI();showToast("⭐ "+DRIVERS.find(x=>x.id===id).name+" è capitano!");}
+function addConstructor(id){const c=CONSTRUCTORS.find(x=>x.id===id);if(myConstructors.length>=2){showToast("Hai già 2 costruttori!","error");return;}if(getBudgetLeft()<c.price){showToast("Budget insufficiente!","error");return;}myConstructors.push(id);updateUI();showToast("✅ "+c.name+" aggiunto!");}
+function removeConstructor(id){myConstructors=myConstructors.filter(x=>x!==id);updateUI();}
+
+// ---- SIMULATION ----
+function loadGP(){const preset=GP_PRESETS[document.getElementById("gp-select").value];document.getElementById("sim-results").style.display="none";if(!preset){simRaceOrder=DRIVERS.map(d=>d.id);simQualiOrder=DRIVERS.map(d=>d.id);simDNF=new Set();simFastestLap=null;simDotD=null;}else{simRaceOrder=[...preset.raceOrder];simQualiOrder=[...preset.qualiOrder];simDNF=new Set(preset.dnf);simFastestLap=preset.fastestLap;simDotD=preset.dotd;}renderRaceOrder();renderQuali();}
+function renderRaceOrder(){const list=document.getElementById("race-order-list");list.innerHTML="";simRaceOrder.forEach((dId,idx)=>{const d=DRIVERS.find(x=>x.id===dId),isDNF=simDNF.has(dId),isFL=simFastestLap===dId,isDD=simDotD===dId;const li=document.createElement("li");li.className=isDNF?"dnf-row":"";li.innerHTML=`<span class="pos-num ${idx===0?"pos-1":idx===1?"pos-2":idx===2?"pos-3":""}">${isDNF?"✕":idx+1}</span><div style="flex:1"><div class="driver-row-name" style="color:${TEAM_COLORS[d.team]}">${d.name}</div><div class="driver-row-team">${d.team}</div></div><div class="row-controls"><button class="row-btn ${isDNF?"active-red":""}" onclick="toggleDNF(${dId})">DNF</button><button class="row-btn ${isFL?"active-gold":""}" onclick="toggleFL(${dId})">FL</button><button class="row-btn ${isDD?"active-gold":""}" onclick="toggleDD(${dId})">DD</button><button class="row-btn" onclick="moveUp(${dId})" ${idx===0?"disabled":""}>▲</button><button class="row-btn" onclick="moveDown(${dId})" ${idx===simRaceOrder.length-1?"disabled":""}>▼</button></div>`;list.appendChild(li);});}
+function renderQuali(){const grid=document.getElementById("quali-grid");grid.innerHTML="";simQualiOrder.forEach((dId,idx)=>{const d=DRIVERS.find(x=>x.id===dId),phase=idx<10?"q3":idx<15?"q2":"q1";grid.innerHTML+=`<div class="quali-row"><span class="q-pos">${idx+1}</span><div style="flex:1"><div class="q-name" style="color:${TEAM_COLORS[d.team]}">${d.name}</div></div><span class="q-phase ${phase}">${idx<10?"Q3":idx<15?"Q2":"Q1 ✕"}</span><div style="display:flex;gap:4px;margin-left:8px"><button class="row-btn" onclick="moveQualiUp(${dId})" ${idx===0?"disabled":""}>▲</button><button class="row-btn" onclick="moveQualiDown(${dId})" ${idx===simQualiOrder.length-1?"disabled":""}>▼</button></div></div>`;});}
+function toggleDNF(id){simDNF.has(id)?simDNF.delete(id):simDNF.add(id);renderRaceOrder();}
+function toggleFL(id){simFastestLap=simFastestLap===id?null:id;renderRaceOrder();}
+function toggleDD(id){simDotD=simDotD===id?null:id;renderRaceOrder();}
+function moveUp(id){const i=simRaceOrder.indexOf(id);if(i>0){[simRaceOrder[i],simRaceOrder[i-1]]=[simRaceOrder[i-1],simRaceOrder[i]];renderRaceOrder();}}
+function moveDown(id){const i=simRaceOrder.indexOf(id);if(i<simRaceOrder.length-1){[simRaceOrder[i],simRaceOrder[i+1]]=[simRaceOrder[i+1],simRaceOrder[i]];renderRaceOrder();}}
+function moveQualiUp(id){const i=simQualiOrder.indexOf(id);if(i>0){[simQualiOrder[i],simQualiOrder[i-1]]=[simQualiOrder[i-1],simQualiOrder[i]];renderQuali();}}
+function moveQualiDown(id){const i=simQualiOrder.indexOf(id);if(i<simQualiOrder.length-1){[simQualiOrder[i],simQualiOrder[i+1]]=[simQualiOrder[i+1],simQualiOrder[i]];renderQuali();}}
+function calcDriverPoints(dId){const breakdown=[],qPos=simQualiOrder.indexOf(dId);let total=0;if(qPos>=0&&qPos<10){breakdown.push({label:`Qualifiche P${qPos+1}`,val:QUALI_PTS[qPos]});total+=QUALI_PTS[qPos];}else if(qPos>=15){breakdown.push({label:"Eliminato Q1",val:-1});total-=1;}const rPos=simRaceOrder.indexOf(dId),isDNF=simDNF.has(dId);if(isDNF){breakdown.push({label:"DNF",val:-15});total-=15;}else{if(rPos<10){breakdown.push({label:`Gara P${rPos+1}`,val:RACE_PTS[rPos]});total+=RACE_PTS[rPos];}breakdown.push({label:"Giri compl.",val:4});total+=4;}if(!isDNF&&qPos>=0&&rPos>=0){const diff=qPos-rPos;if(diff!==0){breakdown.push({label:`Pos. ${diff>0?"guad.":"perse"}`,val:diff});total+=diff;}}if(simFastestLap===dId&&!isDNF){breakdown.push({label:"Giro Veloce 🔥",val:10});total+=10;}if(simDotD===dId){breakdown.push({label:"DotD ⭐",val:10});total+=10;}return{total,breakdown};}
+function calcConstructorPoints(cId){const c=CONSTRUCTORS.find(x=>x.id===cId),teamDrivers=DRIVERS.filter(d=>d.team===c.name),breakdown=[];let total=0;const qp=teamDrivers.map(d=>simQualiOrder.indexOf(d.id)),inQ3=qp.filter(p=>p<10).length,inQ2=qp.filter(p=>p>=10&&p<15).length,all=inQ3+inQ2;if(inQ3===2){breakdown.push({label:"Entrambi Q3",val:10});total+=10;}else if(inQ3===1){breakdown.push({label:"Un pilota Q3",val:5});total+=5;}else if(all===2){breakdown.push({label:"Entrambi Q2",val:3});total+=3;}else if(all===1){breakdown.push({label:"Un pilota Q2",val:1});total+=1;}else{breakdown.push({label:"Nessuno Q2",val:-1});total-=1;}let rPts=0;teamDrivers.forEach(d=>{const r=simRaceOrder.indexOf(d.id);if(!simDNF.has(d.id)&&r<10)rPts+=RACE_PTS[r];});if(rPts>0){breakdown.push({label:"Punti gara",val:rPts});total+=rPts;}else{breakdown.push({label:"Nessun punto",val:-5});total-=5;}return{total,breakdown};}
+function runSimulation(){
+  const res=document.getElementById("sim-results");
+  let grand=0;const cards=[];
+  myDrivers.forEach(dId=>{const d=DRIVERS.find(x=>x.id===dId),{total,breakdown}=calcDriverPoints(dId),isCap=captain===dId,ft=isCap?total*2:total;grand+=ft;cards.push({name:d.name,sub:d.team,color:TEAM_COLORS[d.team],breakdown,total:ft,isCap});});
+  myConstructors.forEach(cId=>{const c=CONSTRUCTORS.find(x=>x.id===cId),{total,breakdown}=calcConstructorPoints(cId);grand+=total;cards.push({name:c.name,sub:"Costruttore",color:TEAM_COLORS[c.name],breakdown,total,isCap:false});});
+  lastSimScore=grand;
+  lastSimGP=GP_PRESETS[document.getElementById("gp-select").value]?.label||"GP Personalizzato";
+  document.getElementById("total-score").textContent=(grand>0?"+":"")+grand;
+  document.getElementById("results-meta").innerHTML=`📍 ${lastSimGP}<br>👑 Capitano: ${captain?DRIVERS.find(d=>d.id===captain).name+" (×2)":"—"}`;
+  const grid=document.getElementById("score-breakdown-grid");grid.innerHTML="";
+  cards.forEach(card=>{grid.innerHTML+=`<div class="score-breakdown-card${card.isCap?" captain-card":""}">${card.isCap?'<span class="cap-multiplier-note">×2 CAP</span>':""}<div class="sbc-name" style="color:${card.color}">${card.name}</div><div class="sbc-team">${card.sub}</div>${card.breakdown.map(it=>`<div class="score-item"><span class="s-label">${it.label}</span><span class="s-val ${it.val>0?"pos":it.val<0?"neg":""}">${it.val>0?"+":""}${it.val}</span></div>`).join("")}<div class="score-total-row"><span class="st-label">${card.isCap?"Totale ×2":"Totale"}</span><span class="st-val">${card.total>0?"+":""}${card.total}</span></div></div>`;});
+  const saveBtn=document.getElementById("save-score-btn");saveBtn.disabled=false;saveBtn.textContent="📤 Salva Punteggio nella Classifica Ufficiale";
+  res.style.display="block";res.scrollIntoView({behavior:"smooth",block:"start"});showToast("🎉 Simulazione completata!");
+}
+
+function switchTab(name,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("panel-"+name).classList.add("active");
+  if(btn)btn.classList.add("active");
+  if(name==="leaderboard")loadLeaderboard();
+}
+
+// ---- INIT ----
+loadGP();
+</script>
+</body>
+</html>
